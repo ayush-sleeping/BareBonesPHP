@@ -30,11 +30,11 @@ if (file_exists('../config/constants.php')) {
                 <nav class="nav">
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <span class="user-info">Welcome, <?php echo htmlspecialchars($_SESSION['username'] ?? 'User'); ?></span>
-                        <a href="dashboard.php" class="btn btn-outline">Dashboard</a>
+                        <a href="backend/dashboard.php" class="btn btn-outline">Dashboard</a>
                         <a href="logout.php" class="btn btn-primary">Logout</a>
                     <?php else: ?>
                         <a href="login.php" class="btn btn-outline">Login</a>
-                        <a href="register.php" class="btn btn-primary">Sign Up</a>
+                        <a href="signup.php" class="btn btn-primary">Sign Up</a>
                     <?php endif; ?>
                 </nav>
             </div>
@@ -113,7 +113,7 @@ if (file_exists('../config/constants.php')) {
                     <a href="login.php">Login</a>
                     <a href="register.php">Register</a>
                     <?php if (isset($_SESSION['user_id'])): ?>
-                        <a href="dashboard.php">Dashboard</a>
+                        <a href="backend/dashboard.php">Dashboard</a>
                         <a href="todos/">My Todos</a>
                     <?php endif; ?>
                 </nav>
