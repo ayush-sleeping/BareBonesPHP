@@ -1,0 +1,1 @@
+<!-- public/logout.php -->
