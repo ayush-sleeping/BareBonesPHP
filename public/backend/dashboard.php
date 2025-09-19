@@ -5,40 +5,29 @@ session_start();
 // Include required files - Fix paths for backend folder
 require_once '../../config/constants.php';
 require_once '../../config/database.php';
+require_once '../../src/controllers/AuthController.php';
+require_once '../../src/controllers/TodoController.php';
+
+// Initialize controllers
+$db = getDB();
+$authController = new AuthController($db);
+$todoController = new TodoController($db);
 
 // Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../login.php');
-    exit;
-}
+$authController->requireAuth('../login.php');
 
-// Get user's todo statistics
-try {
-    $db = getDB();
+// Get current user
+$currentUser = $authController->getCurrentUser();
 
-    // Get total todos
-    $stmt = $db->prepare("SELECT COUNT(*) as total FROM todos WHERE user_id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $total_todos = $stmt->fetchColumn();
+// Get dashboard data using TodoController
+$dashboardData = $todoController->getDashboardData($currentUser['id']);
+$stats = $dashboardData['stats'];
+$recent_todos = $dashboardData['recent_todos'];
 
-    // Get completed todos
-    $stmt = $db->prepare("SELECT COUNT(*) as completed FROM todos WHERE user_id = ? AND is_completed = 1");
-    $stmt->execute([$_SESSION['user_id']]);
-    $completed_todos = $stmt->fetchColumn();
-
-    // Get pending todos
-    $pending_todos = $total_todos - $completed_todos;
-
-    // Get recent todos (last 5)
-    $stmt = $db->prepare("SELECT id, title, is_completed, created_at FROM todos WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
-    $stmt->execute([$_SESSION['user_id']]);
-    $recent_todos = $stmt->fetchAll();
-
-} catch (PDOException $e) {
-    error_log("Dashboard Error: " . $e->getMessage());
-    $total_todos = $completed_todos = $pending_todos = 0;
-    $recent_todos = [];
-}
+// Extract stats for backward compatibility with the view
+$total_todos = $stats['total'];
+$completed_todos = $stats['completed'];
+$pending_todos = $stats['pending'];
 ?>
 
 <!DOCTYPE html>

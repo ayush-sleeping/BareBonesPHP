@@ -5,86 +5,35 @@ session_start();
 // Include required files
 require_once '../../../config/constants.php';
 require_once '../../../config/database.php';
+require_once '../../../src/controllers/AuthController.php';
+require_once '../../../src/controllers/TodoController.php';
+
+// Initialize controllers
+$authController = new AuthController($pdo);
+$todoController = new TodoController($pdo);
 
 // Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../login.php');
+$authController->requireAuth();
+$currentUser = $authController->getCurrentUser();
+
+// Let the controller handle everything
+$pageData = $todoController->handleIndexPage($currentUser['id']);
+
+// Handle redirect if needed
+if ($pageData['redirect']) {
+    header('Location: ' . $pageData['redirect']);
     exit;
 }
 
-// Handle todo actions (toggle complete, delete)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    $todo_id = (int)($_POST['todo_id'] ?? 0);
-
-    if ($todo_id > 0) {
-        try {
-            $db = getDB();
-
-            if ($action === 'toggle') {
-                // Toggle completion status
-                $stmt = $db->prepare("UPDATE todos SET is_completed = NOT is_completed WHERE id = ? AND user_id = ?");
-                $stmt->execute([$todo_id, $_SESSION['user_id']]);
-            } elseif ($action === 'delete') {
-                // Delete todo
-                $stmt = $db->prepare("DELETE FROM todos WHERE id = ? AND user_id = ?");
-                $stmt->execute([$todo_id, $_SESSION['user_id']]);
-            }
-
-            // Redirect to avoid form resubmission
-            header('Location: index.php');
-            exit;
-
-        } catch (PDOException $e) {
-            error_log("Todo Action Error: " . $e->getMessage());
-            $error = 'An error occurred. Please try again.';
-        }
-    }
-}
-
-// Get filter parameter
-$filter = $_GET['filter'] ?? 'all';
-$valid_filters = ['all', 'pending', 'completed'];
-if (!in_array($filter, $valid_filters)) {
-    $filter = 'all';
-}
-
-// Get todos based on filter
-try {
-    $db = getDB();
-
-    $where_clause = "WHERE user_id = ?";
-    $params = [$_SESSION['user_id']];
-
-    if ($filter === 'pending') {
-        $where_clause .= " AND is_completed = 0";
-    } elseif ($filter === 'completed') {
-        $where_clause .= " AND is_completed = 1";
-    }
-
-    $stmt = $db->prepare("SELECT id, title, description, is_completed, created_at FROM todos $where_clause ORDER BY created_at DESC");
-    $stmt->execute($params);
-    $todos = $stmt->fetchAll();
-
-    // Get counts for filter tabs
-    $stmt = $db->prepare("SELECT COUNT(*) FROM todos WHERE user_id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
-    $total_count = $stmt->fetchColumn();
-
-    $stmt = $db->prepare("SELECT COUNT(*) FROM todos WHERE user_id = ? AND is_completed = 0");
-    $stmt->execute([$_SESSION['user_id']]);
-    $pending_count = $stmt->fetchColumn();
-
-    $stmt = $db->prepare("SELECT COUNT(*) FROM todos WHERE user_id = ? AND is_completed = 1");
-    $stmt->execute([$_SESSION['user_id']]);
-    $completed_count = $stmt->fetchColumn();
-
-} catch (PDOException $e) {
-    error_log("Todos Index Error: " . $e->getMessage());
-    $todos = [];
-    $total_count = $pending_count = $completed_count = 0;
-    $error = 'Unable to load todos. Please try again.';
-}
+// Extract data for the view
+$error = $pageData['error'];
+$success = $pageData['success_message'];
+$todos = $pageData['todos'];
+$counts = $pageData['counts'];
+$filter = $pageData['filter'];
+$total_count = $counts['all'] ?? 0;
+$pending_count = $counts['pending'] ?? 0;
+$completed_count = $counts['completed'] ?? 0;
 ?>
 
 <!DOCTYPE html>
@@ -106,7 +55,7 @@ try {
                     </a>
                 </div>
                 <nav class="nav">
-                    <span class="user-info">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
+                    <span class="user-info">Welcome, <?php echo htmlspecialchars($currentUser['username']); ?></span>
                     <a href="../../logout.php" class="btn btn-primary">Logout</a>
                 </nav>
             </div>
@@ -140,8 +89,12 @@ try {
                         <a href="create.php" class="btn btn-primary">Add New Todo</a>
                     </div>
 
-                    <?php if (isset($error)): ?>
+                    <?php if ($error): ?>
                         <div class="error"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endif; ?>
+
+                    <?php if ($success): ?>
+                        <div class="success"><?php echo htmlspecialchars($success); ?></div>
                     <?php endif; ?>
 
                     <!-- Filter Tabs -->

@@ -1,5 +1,3 @@
-<!-- public/login.php -->
-
 <?php
 // filepath: /Applications/XAMPP/xamppfiles/htdocs/BareBonesPHP/public/login.php
 session_start();
@@ -7,50 +5,37 @@ session_start();
 // Include required files
 require_once '../config/constants.php';
 require_once '../config/database.php';
+require_once '../src/controllers/AuthController.php';
+
+// Initialize AuthController
+$db = getDB();
+$authController = new AuthController($db);
 
 // Redirect if already logged in
-if (isset($_SESSION['user_id'])) {
-    header('Location: backend/dashboard.php');
-    exit;
-}
+$authController->redirectIfLoggedIn('backend/dashboard.php');
 
 $error = '';
 $success = '';
+
+// Check for flash messages (like signup success)
+$success = $authController->getFlashMessage('signup_success');
+$success = $success ?: $authController->getFlashMessage('logout_success');
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    // Basic validation
-    if (empty($username) || empty($password)) {
-        $error = 'Please fill in all fields.';
+    // Use AuthController to handle login
+    $result = $authController->login($username, $password);
+
+    if ($result['success']) {
+        // Login successful - redirect to dashboard
+        header('Location: backend/dashboard.php');
+        exit;
     } else {
-        try {
-            $db = getDB();
-
-            // Find user by username or email
-            $stmt = $db->prepare("SELECT id, username, email, password FROM users WHERE username = ? OR email = ?");
-            $stmt->execute([$username, $username]);
-            $user = $stmt->fetch();
-
-            if ($user && password_verify($password, $user['password'])) {
-                // Login successful
-                $_SESSION['user_id'] = $user['id'];
-                $_SESSION['username'] = $user['username'];
-                $_SESSION['email'] = $user['email'];
-
-                // Redirect to dashboard
-                header('Location: backend/dashboard.php');
-                exit;
-            } else {
-                $error = 'Invalid username/email or password.';
-            }
-
-        } catch (PDOException $e) {
-            error_log("Login Error: " . $e->getMessage());
-            $error = 'An error occurred. Please try again.';
-        }
+        // Show validation errors
+        $error = implode('<br>', $result['errors']);
     }
 }
 ?>

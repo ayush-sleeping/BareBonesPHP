@@ -5,15 +5,17 @@ session_start();
 // Include required files
 require_once '../../../config/constants.php';
 require_once '../../../config/database.php';
+require_once '../../../src/controllers/AuthController.php';
+require_once '../../../src/controllers/TodoController.php';
+
+// Initialize controllers
+$authController = new AuthController($pdo);
+$todoController = new TodoController($pdo);
 
 // Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../login.php');
-    exit;
-}
+$authController->requireAuth();
+$currentUser = $authController->getCurrentUser();
 
-$error = '';
-$success = '';
 $todo_id = (int)($_GET['id'] ?? 0);
 
 // Redirect if no valid ID provided
@@ -22,63 +24,18 @@ if ($todo_id <= 0) {
     exit;
 }
 
-// Get todo data
-try {
-    $db = getDB();
+// Let the controller handle everything
+$pageData = $todoController->handleEditPage($currentUser['id'], $todo_id);
 
-    // Fetch todo data (make sure it belongs to current user)
-    $stmt = $db->prepare("SELECT id, title, description, is_completed FROM todos WHERE id = ? AND user_id = ?");
-    $stmt->execute([$todo_id, $_SESSION['user_id']]);
-    $todo = $stmt->fetch();
-
-    if (!$todo) {
-        $_SESSION['todo_error'] = 'Todo not found or you do not have permission to edit it.';
-        header('Location: index.php');
-        exit;
-    }
-
-} catch (PDOException $e) {
-    error_log("Todo Edit Fetch Error: " . $e->getMessage());
-    $_SESSION['todo_error'] = 'An error occurred while loading the todo.';
-    header('Location: index.php');
+// Handle redirect if needed
+if ($pageData['redirect']) {
+    header('Location: ' . $pageData['redirect']);
     exit;
 }
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title = trim($_POST['title'] ?? '');
-    $description = trim($_POST['description'] ?? '');
-    $is_completed = isset($_POST['is_completed']) ? 1 : 0;
-
-    // Validation
-    if (empty($title)) {
-        $error = 'Title is required.';
-    } elseif (strlen($title) > 255) {
-        $error = 'Title must be less than 255 characters.';
-    } elseif (strlen($description) > 1000) {
-        $error = 'Description must be less than 1000 characters.';
-    } else {
-        try {
-            // Update todo
-            $stmt = $db->prepare("UPDATE todos SET title = ?, description = ?, is_completed = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
-            $stmt->execute([$title, $description, $is_completed, $todo_id, $_SESSION['user_id']]);
-
-            // Redirect to todos index with success message
-            $_SESSION['todo_success'] = 'Todo updated successfully!';
-            header('Location: index.php');
-            exit;
-
-        } catch (PDOException $e) {
-            error_log("Todo Update Error: " . $e->getMessage());
-            $error = 'An error occurred while updating the todo. Please try again.';
-        }
-    }
-
-    // Update todo array with new values for form display
-    $todo['title'] = $title;
-    $todo['description'] = $description;
-    $todo['is_completed'] = $is_completed;
-}
+// Extract data for the view
+$error = $pageData['error'];
+$todo = $pageData['todo'];
 ?>
 
 <!DOCTYPE html>
@@ -100,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </a>
                 </div>
                 <nav class="nav">
-                    <span class="user-info">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
+                    <span class="user-info">Welcome, <?php echo htmlspecialchars($currentUser['username']); ?></span>
                     <a href="../../logout.php" class="btn btn-primary">Logout</a>
                 </nav>
             </div>

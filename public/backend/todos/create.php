@@ -5,47 +5,30 @@ session_start();
 // Include required files
 require_once '../../../config/constants.php';
 require_once '../../../config/database.php';
+require_once '../../../src/controllers/AuthController.php';
+require_once '../../../src/controllers/TodoController.php';
+
+// Initialize controllers
+$authController = new AuthController($pdo);
+$todoController = new TodoController($pdo);
 
 // Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header('Location: ../../login.php');
+$authController->requireAuth();
+$currentUser = $authController->getCurrentUser();
+
+// Let the controller handle everything
+$pageData = $todoController->handleCreatePage($currentUser['id']);
+
+// Handle redirect if needed
+if ($pageData['redirect']) {
+    header('Location: ' . $pageData['redirect']);
     exit;
 }
 
-$error = '';
-$success = '';
-
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title = trim($_POST['title'] ?? '');
-    $description = trim($_POST['description'] ?? '');
-
-    // Validation
-    if (empty($title)) {
-        $error = 'Title is required.';
-    } elseif (strlen($title) > 255) {
-        $error = 'Title must be less than 255 characters.';
-    } elseif (strlen($description) > 1000) {
-        $error = 'Description must be less than 1000 characters.';
-    } else {
-        try {
-            $db = getDB();
-
-            // Insert new todo
-            $stmt = $db->prepare("INSERT INTO todos (user_id, title, description) VALUES (?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $title, $description]);
-
-            // Redirect to todos index with success message
-            $_SESSION['todo_success'] = 'Todo created successfully!';
-            header('Location: index.php');
-            exit;
-
-        } catch (PDOException $e) {
-            error_log("Todo Create Error: " . $e->getMessage());
-            $error = 'An error occurred while creating the todo. Please try again.';
-        }
-    }
-}
+// Extract data for the view
+$error = $pageData['error'];
+$title = $pageData['form_data']['title'];
+$description = $pageData['form_data']['description'];
 ?>
 
 <!DOCTYPE html>
@@ -67,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </a>
                 </div>
                 <nav class="nav">
-                    <span class="user-info">Welcome, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
+                    <span class="user-info">Welcome, <?php echo htmlspecialchars($currentUser['username']); ?></span>
                     <a href="../../logout.php" class="btn btn-primary">Logout</a>
                 </nav>
             </div>

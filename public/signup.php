@@ -1,4 +1,3 @@
-<!-- public/signup.php -->
 <?php
 // filepath: /Applications/XAMPP/xamppfiles/htdocs/BareBonesPHP/public/signup.php
 session_start();
@@ -6,12 +5,14 @@ session_start();
 // Include required files
 require_once '../config/constants.php';
 require_once '../config/database.php';
+require_once '../src/controllers/AuthController.php';
+
+// Initialize AuthController
+$db = getDB();
+$authController = new AuthController($db);
 
 // Redirect if already logged in
-if (isset($_SESSION['user_id'])) {
-    header('Location: backend/dashboard.php');
-    exit;
-}
+$authController->redirectIfLoggedIn('backend/dashboard.php');
 
 $error = '';
 $success = '';
@@ -23,52 +24,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
     $confirm_password = $_POST['confirm_password'] ?? '';
 
-    // Validation
-    if (empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
-        $error = 'Please fill in all fields.';
-    } elseif (strlen($username) < 3) {
-        $error = 'Username must be at least 3 characters long.';
-    } elseif (strlen($username) > 50) {
-        $error = 'Username must be less than 50 characters.';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $error = 'Please enter a valid email address.';
-    } elseif (strlen($password) < PASSWORD_MIN_LENGTH) {
-        $error = 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters long.';
-    } elseif ($password !== $confirm_password) {
-        $error = 'Passwords do not match.';
+    // Use AuthController to handle registration
+    $result = $authController->register($username, $email, $password, $confirm_password);
+
+    if ($result['success']) {
+        // Success - redirect to login page
+        $authController->setFlashMessage('signup_success', $result['message']);
+        header('Location: login.php');
+        exit;
     } else {
-        try {
-            $db = getDB();
-
-            // Check if username already exists
-            $stmt = $db->prepare("SELECT id FROM users WHERE username = ?");
-            $stmt->execute([$username]);
-            if ($stmt->fetch()) {
-                $error = 'Username already exists. Please choose a different one.';
-            } else {
-                // Check if email already exists
-                $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
-                $stmt->execute([$email]);
-                if ($stmt->fetch()) {
-                    $error = 'Email already registered. Please use a different email.';
-                } else {
-                    // Hash password and insert user
-                    $hashed_password = password_hash($password, HASH_ALGO);
-
-                    $stmt = $db->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
-                    $stmt->execute([$username, $email, $hashed_password]);
-
-                    // Success - redirect to login page
-                    $_SESSION['signup_success'] = 'Account created successfully! Please login.';
-                    header('Location: login.php');
-                    exit;
-                }
-            }
-
-        } catch (PDOException $e) {
-            error_log("Signup Error: " . $e->getMessage());
-            $error = 'An error occurred while creating your account. Please try again.';
-        }
+        // Show validation errors
+        $error = implode('<br>', $result['errors']);
     }
 }
 ?>

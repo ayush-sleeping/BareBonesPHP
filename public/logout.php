@@ -5,22 +5,16 @@ session_start();
 
 // Include required files
 require_once '../config/constants.php';
+require_once '../config/database.php';
+require_once '../src/controllers/AuthController.php';
 
-// Store username for display (before destroying session)
-$username = $_SESSION['username'] ?? 'User';
-$was_logged_in = isset($_SESSION['user_id']);
+// Initialize AuthController
+$authController = new AuthController($pdo);
 
-// Destroy all session data
-session_unset();
-session_destroy();
-
-// Start a new session for the logout message
-session_start();
-
-// Set logout success message
-if ($was_logged_in) {
-    $_SESSION['logout_success'] = 'You have been successfully logged out.';
-}
+// Handle logout using controller
+$logoutResult = $authController->logout();
+$username = $logoutResult['username'];
+$was_logged_in = $logoutResult['was_logged_in'];
 ?>
 
 <!DOCTYPE html>
